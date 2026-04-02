@@ -37,8 +37,15 @@ namespace AssistViewDemo
             sfAIAssistView1.DataBindings.Add("Messages", viewModel, "Chats", true, DataSourceUpdateMode.OnPropertyChanged);
             sfAIAssistView1.DataBindings.Add("ShowTypingIndicator", viewModel, "ShowTypingIndicator", true, DataSourceUpdateMode.OnPropertyChanged);
             sfAIAssistView1.DataBindings.Add("Suggestions", viewModel, "Suggestion", true, DataSourceUpdateMode.OnPropertyChanged);
-            viewModel.CurrentUser = sfAIAssistView1.User;
 
+            if (viewModel.CurrentUser != null && !string.IsNullOrEmpty(sfAIAssistView1.User.Name))
+            {
+                viewModel.CurrentUser = sfAIAssistView1.User;
+            }
+            else
+            {
+                sfAIAssistView1.User = viewModel.CurrentUser;
+            }
             sfAIAssistView1.ShowTypingIndicator = viewModel.ShowTypingIndicator;
             viewModel.PropertyChanged += ViewModel_PropertyChanged;
             sfAIAssistView1.SuggestionSelected += OnSuggestionSelected;

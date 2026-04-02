@@ -31,20 +31,19 @@ namespace AssistViewDemo
         /// </summary>
         private void InitializeComponent()
         {
-           
-            SuspendLayout();          
+            SuspendLayout();
             // 
             // Form1
             // 
             ClientSize = new Size(1240, 526);
             Name = "Form1";
-            Text = "Form1";
+            Text = "AIAssistView";
             ResumeLayout(false);
 
         }
 
         #endregion
-       
+
     }
 }
 
