@@ -65,22 +65,22 @@ namespace AssistViewDemo
             }
         }
 
-        private ObservableCollection<ReservationSuggestion> suggestion;
-        public ObservableCollection<ReservationSuggestion> Suggestion
+        private ObservableCollection<ReservationSuggestion> suggestions;
+        public ObservableCollection<ReservationSuggestion> Suggestions
         {
             get
             {
-                if(this.suggestion == null)
+                if(this.suggestions == null)
                 {
-                    this.suggestion = new ObservableCollection<ReservationSuggestion>();
+                    this.suggestions = new ObservableCollection<ReservationSuggestion>();
                 }
 
-                return this.suggestion;
+                return this.suggestions;
             }
             set
             {
-                this.suggestion = value;
-                RaisePropertyChanged("Suggestion");
+                this.suggestions = value;
+                RaisePropertyChanged("Suggestions");
             }
         }
 
@@ -131,10 +131,10 @@ namespace AssistViewDemo
             RaisePropertyChanged(nameof(Chats));
 
             // Populate initial suggestions with available countries
-            Suggestion.Clear();
+            Suggestions.Clear();
             foreach (var country in manager.Countries)
             {
-                Suggestion.Add(new ReservationSuggestion { DisplayText = country.Name, Action = SuggestionAction.SendMessage });
+                Suggestions.Add(new ReservationSuggestion { DisplayText = country.Name, Action = SuggestionAction.SendMessage });
             }
 
             // Prepare ResponseManager to accept the country as the first booking input
@@ -178,7 +178,7 @@ namespace AssistViewDemo
                 {
                     try
                     {
-                        Suggestion.Clear();
+                        Suggestions.Clear();
                         ShowTypingIndicator = true;
 
                         await service.NonStreamingChat(item.Text);
@@ -194,7 +194,7 @@ namespace AssistViewDemo
 
                         foreach (var suggestion in bundle.Suggestions)
                         {
-                            Suggestion.Add(suggestion);
+                            Suggestions.Add(suggestion);
                         }
                     }
                     finally
