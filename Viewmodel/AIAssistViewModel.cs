@@ -1,6 +1,5 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using OpenAI.Assistants;
 using Syncfusion.WinForms.AIAssistView;
 using System;
 using System.Collections.Generic;
@@ -8,19 +7,14 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
-using System.Runtime.Versioning;
 using System.Threading.Tasks;
-using static AssistViewDemo.AIAssistViewModel;
 
 namespace AssistViewDemo
 {
-#if NETCOREAPP
-    [SupportedOSPlatform("windows")]
-#endif
     public class AIAssistViewModel : INotifyPropertyChanged
     {
         #region Fields and property
-       AIAssistChatService service;
+        AIAssistChatService service;
 
         private ObservableCollection<object> chats;
         public ObservableCollection<object> Chats
@@ -71,14 +65,14 @@ namespace AssistViewDemo
             }
         }
 
-        private IEnumerable<string> suggestion;
-        public IEnumerable<string> Suggestion
+        private ObservableCollection<ReservationSuggestion> suggestion;
+        public ObservableCollection<ReservationSuggestion> Suggestion
         {
             get
             {
                 if(this.suggestion == null)
                 {
-                    this.suggestion = new ObservableCollection<string>();
+                    this.suggestion = new ObservableCollection<ReservationSuggestion>();
                 }
 
                 return this.suggestion;
@@ -109,61 +103,42 @@ namespace AssistViewDemo
         public AIAssistViewModel()
         {
             this.Chats = new ObservableCollection<object>();
-            this.Chats.CollectionChanged += Chats_CollectionChanged;
-            this.Suggestion = new List<string>();
             this.CurrentUser = new Author() { Name = "John" };
-
             service = new AIAssistChatService();
-            service.Initialize();
+            service?.Initialize();
 
-            Chats.Add(new TextMessage
-            {
-                Author = new Author { Name = "Bot", AvatarImage = Image.FromFile(@"Asset\AI_Assist.png") },
-                DateTime = DateTime.Now,
-                Text = "I am your AI assistant. \n" + "Please choose from the options below",
-            });
+            skipNextNotify = true;
+            AddInitialBotMessage();
+            skipNextNotify = false;
+            
+            this.Chats.CollectionChanged += Chats_CollectionChanged;
         }
 
-        public async void InitAI()
+        private void AddInitialBotMessage()
         {
-            string goalSuggest = "How does WinForms handle UI rendering?";
-            string goalSolution = "WinForms renders UI elements primarily by wrapping native Windows API (HWND-based) controls, using GDI/GDI+ for drawing, and firing Paint events for customization.";
-
-            string toolSuggest = "What is the Future of WinForms?";
-            string toolSolution = "The future of Windows Forms (WinForms) is primarily focused on maintenance, stability, and support for legacy applications running on modern .NET runtimes, rather than active development of new features or cross-platform expansion";
-
-            service = new AIAssistChatService
+            // Use the name configured in ResponseManager and present country suggestions as the first message
+            var manager = ResponseManager.Instance;
+            string initialMessage = "Welcome " + manager.Name + "! Where would you like to go?";
+            var initialBotMessage = new TextMessage
             {
-                OfflineContent = new Dictionary<string, string>
-                {
-                    { goalSuggest, goalSolution},
-                    { toolSuggest, toolSolution}
-                },
+                Author = new Author { Name = "Bot" , AvatarImage = Image.FromFile(@"Asset\AI_Assist.png") },
+                DateTime = DateTime.Now,
+                Text = initialMessage,
+
             };
 
-            await service.Initialize();
-            Suggestion = new List<string>(service.OfflineContent.Keys);
-           
-        }
+            this.chats.Add(initialBotMessage);
+            RaisePropertyChanged(nameof(Chats));
 
-        public void UpdateAI(string key, string model, string endpoint)
-        {
-            if (service != null)
+            // Populate initial suggestions with available countries
+            Suggestion.Clear();
+            foreach (var country in manager.Countries)
             {
-                service.UpdateAI(key, model, endpoint);
+                Suggestion.Add(new ReservationSuggestion { DisplayText = country.Name, Action = SuggestionAction.SendMessage });
             }
-        }
 
-        public void SendUserMessage(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-
-            Chats.Add(new TextMessage
-            {
-                Author = this.currentUser,
-                DateTime = DateTime.Now,
-                Text = text,
-            });
+            // Prepare ResponseManager to accept the country as the first booking input
+            manager.BeginBooking();
         }
 
         private bool skipNextNotify = false;
@@ -180,6 +155,18 @@ namespace AssistViewDemo
             skipNextNotify = false;
         }
 
+        public void SendUserMessage(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            Chats.Add(new TextMessage
+            {
+                Author = this.currentUser,
+                DateTime = DateTime.Now,
+                Text = text,
+            });
+        }
+
         private async void Chats_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             if (skipNextNotify || e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
@@ -189,35 +176,30 @@ namespace AssistViewDemo
             {
                 if (item.Author.Name == currentUser.Name)
                 {
-                    var userText = (item.Text ?? string.Empty);
-
-                    // If this is a client-side UI trigger, do not call the AI service here.
-                    // The UI will present controls (calendar, place buttons, text box/label) and
-                    // post bot confirmations or the actual user text when committed.
-                    if (string.Equals(userText, "Choose a TextBox to Type", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(userText, "Choose a RichTextBox to Type", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return;
-                    }
-
                     try
                     {
+                        Suggestion.Clear();
                         ShowTypingIndicator = true;
 
                         await service.NonStreamingChat(item.Text);
+
+                        var bundle = ResponseManager.GetResponseForQuery(item.Text);
 
                         Chats.Add(new TextMessage
                         {
                             Author = new Author { Name = "Bot", AvatarImage = Image.FromFile(@"Asset\AI_Assist.png") },
                             DateTime = DateTime.Now,
-                            Text = service.Response,
+                            Text = bundle.BotResponse,
                         });
+
+                        foreach (var suggestion in bundle.Suggestions)
+                        {
+                            Suggestion.Add(suggestion);
+                        }
                     }
                     finally
                     {
                         ShowTypingIndicator = false;
-                        if (service.Suggestion != null)
-                            Suggestion = new List<string>(service.Suggestion);
                     }
                 }
             }
@@ -233,37 +215,7 @@ namespace AssistViewDemo
 
             private string API_ENDPOINT = string.Empty;
 
-            public string Requirement { get; set; }
-            public Dictionary<string, string> OfflineContent { get; set; } = new Dictionary<string, string>();
-
-            private ObservableCollection<string> suggestion;
-            public ObservableCollection<string> Suggestion
-            {
-                get
-                {
-                    if (this.suggestion == null)
-                    {
-                        this.suggestion = new ObservableCollection<string>();
-                    }
-
-                    return this.suggestion;
-                }
-                set
-                {
-                    this.suggestion = value;
-                }
-            }
-
             public string Response { get; set; }
-
-            public void UpdateAI(string key, string model, string endpoint)
-            {
-                this.OPENAI_KEY = key;
-                this.OPENAI_MODEL = model;
-                this.API_ENDPOINT = endpoint;
-                Initialize();
-            }
-
             public async Task Initialize()
             {
                 if (!string.IsNullOrWhiteSpace(OPENAI_KEY) &&
@@ -291,11 +243,9 @@ namespace AssistViewDemo
                 }
             }
 
-
             public async Task NonStreamingChat(string line)
             {
                 Response = string.Empty;
-                Suggestion.Clear();
 
                 // Check if credentials are missing or initialization failed
                 if (string.IsNullOrWhiteSpace(OPENAI_KEY) ||
@@ -304,18 +254,6 @@ namespace AssistViewDemo
                     gpt == null)
                 {
                     await Task.Delay(1000); // Simulate network delay for realism
-                    if (OfflineContent.ContainsKey(line))
-                    {
-                        Response = OfflineContent[line];
-                    }
-                    else
-                    {
-                        Response = "I'm sorry, I don't have an offline response for that. Try asking one of the suggested questions.";
-                    }
-                    
-                    // Add some dummy suggestions for next steps
-                    Suggestion.Add("How does WinForms handle UI rendering?");
-                    Suggestion.Add("What is the Future of WinForms?");
                     return;
                 }
 
@@ -323,12 +261,19 @@ namespace AssistViewDemo
                 {
                     var response = await gpt.GetChatMessageContentAsync(line);
                     Response = response.ToString();
-                    // In a real scenario, you'd parseSuggestions from the AI response here
                 }
                 catch (Exception ex)
                 {
                     Response = "Error connecting to AI service: " + ex.Message;
                 }
+            }
+
+            private List<ChatData> dummyData;
+
+            public class ChatData
+            {
+                public string Query { get; set; }
+                public string Response { get; set; }
             }
 
         }
